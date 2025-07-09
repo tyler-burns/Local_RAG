@@ -3,12 +3,38 @@ from langchain.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.document_loaders import UnstructuredFileLoader, DirectoryLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.llms import LlamaCpp
 from langchain.chains import RetrievalQA
 
 def load_documents(folder_path):
-    loader = DirectoryLoader(folder_path, loader_cls=UnstructuredFileLoader)
-    return loader.load()
+    supported_docs = []
+    skipped_files = []
+
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            full_path = os.path.join(root, file)
+            ext = os.path.splitext(file)[1].lower()
+
+            try:
+                if ext == ".pdf":
+                    loader = PyPDFLoader(full_path)
+                    supported_docs.extend(loader.load())
+                elif ext == ".txt":
+                    loader = TextLoader(full_path, autodetect_encoding=True)
+                    supported_docs.extend(loader.load())
+                else:
+                    skipped_files.append(full_path)
+            except Exception as e:
+                print(f"[ERROR] Failed to load {full_path}: {e}")
+                skipped_files.append(full_path)
+
+    if skipped_files:
+        print("\n⚠️ Skipped the following unsupported or failed files:")
+        for path in skipped_files:
+            print(f" - {path}")
+
+    return supported_docs
 
 def build_vectorstore(documents):
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
